@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Apurador Genérico Multi-Loterias (100% Precision)</title>
+    <!-- Tailwind CSS para Estilização -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js para Reatividade -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Canvas Confetti para Animação de Fireworks -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 p-3 md:p-6 font-sans">
+
+    <div class="max-w-7xl mx-auto" x-data="apuradorGenerico()">
+
+        <!-- Cabeçalho -->
+        <header class="mb-4 text-center">
+            <h1 class="text-2xl md:text-3xl font-extrabold text-emerald-400 tracking-wider uppercase">
+                Apurador Multi-Loterias
+            </h1>
+            <p class="text-xs md:text-sm text-slate-400 mt-0.5">
+                Validação de Palpites (Premia apenas com 100% de Acertos ou Erros)
+            </p>
+        </header>
+
+        <!-- Seleção da Modalidade / Loteria -->
+        <div class="bg-slate-800 p-3.5 rounded-xl shadow-lg border border-slate-700 mb-4">
+            <label class="block text-xs font-bold text-slate-300 uppercase mb-2">Selecione a Modalidade:</label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 text-xs font-semibold">
+                <template x-for="(m, key) in modalidades" :key="key">
+                    <button @click="modalidadeAtiva = key; processado = false"
+                            :class="modalidadeAtiva === key ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'"
+                            class="p-2.5 rounded-lg border transition text-center flex flex-col items-center justify-center gap-1">
+                        <span class="font-bold" x-text="m.nome"></span>
+                        <span class="text-[10px] opacity-75 font-mono" x-text="m.info"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Área de Entrada de Dados -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+
+            <!-- Caixa de Sorteios -->
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                <div class="flex justify-between items-center mb-1">
+                    <label class="block text-xs font-semibold text-emerald-300">
+                        1. Sorteios (Formatos aceitos: M1, M2 ou M3)
+                    </label>
+                    <span class="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded font-mono"
+                          x-text="'Requer ' + modalidadeAtual.sorteia + ' dezenas (' + modalidadeAtual.universo + ')'"></span>
+                </div>
+                <textarea x-model="inputSorteios" rows="5"
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono resize-none"
+                    placeholder="Exemplos de entrada (1 por linha):&#10;1286 31/08/2026 02 04 08 10 12 17 23&#10;1286 02 04 08 10 12 17 23&#10;02 04 08 10 12 17 23"></textarea>
+            </div>
+
+            <!-- Caixa de Palpites -->
+            <div class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                <div class="flex justify-between items-center mb-1">
+                    <label class="block text-xs font-semibold text-emerald-300">
+                        2. Seus Palpites (1 por linha)
+                    </label>
+                    <span class="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded font-mono"
+                          x-text="modalidadeAtual.regrasPalpite"></span>
+                </div>
+                <textarea x-model="inputPalpites" rows="5"
+                    class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-mono resize-none"
+                    placeholder="Digite ou cole seus palpites (1 por linha)..."></textarea>
+            </div>
+
+        </div>
+
+        <!-- Botão de Ação -->
+        <div class="text-center mb-6">
+            <button @click="processarApuracao()"
+                class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-8 py-2.5 rounded-xl shadow-lg transition transform hover:-translate-y-0.5 text-sm">
+                Apurar Resultados
+            </button>
+        </div>
+
+        <!-- Mensagem de Erro de Validação -->
+        <template x-if="erroMsg">
+            <div class="bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl mb-4 text-rose-300 text-xs text-center font-semibold" x-text="erroMsg"></div>
+        </template>
+
+        <!-- Resultados -->
+        <template x-if="processado">
+            <div class="space-y-4">
+
+                <!-- PAINEL SUPERIOR: RESUMO GERAL + METRICAS -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                    <!-- RESUMO GERAL -->
+                    <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                        <h2 class="text-sm font-bold mb-3 text-emerald-400 border-b border-slate-700 pb-1.5 uppercase tracking-wide">
+                            Resumo Geral (<span x-text="modalidadeAtual.nome"></span>)
+                        </h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold">Total Sorteios</span>
+                                <span class="text-xl font-bold text-slate-100" x-text="resumo.totalSorteios"></span>
+                            </div>
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold">Total Palpites</span>
+                                <span class="text-xl font-bold text-slate-100" x-text="resumo.totalPalpites"></span>
+                            </div>
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold">Palpites Premiados</span>
+                                <span class="text-xl font-bold text-emerald-400" x-text="resumo.totalPremiados"></span>
+                            </div>
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold">Aproveitamento</span>
+                                <span class="text-xl font-bold text-amber-400" x-text="resumo.taxaSucesso + '%'"></span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ESTATÍSTICAS DOS CONCURSOS -->
+                    <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                        <h2 class="text-sm font-bold mb-3 text-emerald-400 border-b border-slate-700 pb-1.5 uppercase tracking-wide">Estatísticas por Concurso</h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono">
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold font-sans">Mínimo</span>
+                                <span class="text-xl font-bold text-slate-100" x-text="metricasConcursos.min"></span>
+                            </div>
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold font-sans">Máximo</span>
+                                <span class="text-xl font-bold text-emerald-400" x-text="metricasConcursos.max"></span>
+                            </div>
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold font-sans">Média</span>
+                                <span class="text-xl font-bold text-cyan-400" x-text="metricasConcursos.avg"></span>
+                            </div>
+                            <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                                <span class="block text-slate-400 text-[10px] uppercase font-semibold font-sans">Cobertura</span>
+                                <span class="text-xl font-bold text-indigo-400" x-text="metricasConcursos.ratio + '%'"></span>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- PAINEL INTERMEDIÁRIO: PREMIADOS POR CONCURSO + RANKING -->
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+
+                    <!-- PREMIADOS POR CONCURSO -->
+                    <section class="xl:col-span-2 bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                        <h2 class="text-sm font-bold mb-3 text-emerald-400 border-b border-slate-700 pb-1.5 uppercase tracking-wide">Premiados por Concurso</h2>
+                        <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 gap-2 font-mono max-h-56 overflow-y-auto pr-1">
+                            <template x-for="c in resumoPorConcurso" :key="c.concurso">
+                                <div class="bg-slate-900 p-2 rounded-lg border border-slate-700 text-center flex items-center justify-between px-2.5">
+                                    <span class="text-[11px] text-slate-400" x-text="'#' + c.concurso"></span>
+                                    <span class="text-xs font-bold"
+                                          :class="c.premiados > 0 ? 'text-emerald-400' : 'text-slate-500'"
+                                          x-text="c.premiados + 'x'"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </section>
+
+                    <!-- RANKING DOS PALPITES -->
+                    <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                        <div class="flex items-center justify-between border-b border-slate-700 pb-1.5 mb-3">
+                            <h2 class="text-sm font-bold text-emerald-400 uppercase tracking-wide">Ranking dos Palpites</h2>
+                            <button @click="copiarRankingClipboard()"
+                                    class="text-[11px] bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded transition font-medium flex items-center gap-1">
+                                <span x-text="copiadoRanking ? '✓ Copiado!' : '📋 Copiar Palpites'"></span>
+                            </button>
+                        </div>
+                        <div class="overflow-y-auto max-h-56 pr-1">
+                            <table class="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr class="bg-slate-900 text-slate-400 uppercase text-[10px]">
+                                        <th class="p-2 border-b border-slate-700 text-center">#</th>
+                                        <th class="p-2 border-b border-slate-700">ID</th>
+                                        <th class="p-2 border-b border-slate-700">Dezenas</th>
+                                        <th class="p-2 border-b border-slate-700 text-center">Prêmios</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-700 font-mono">
+                                    <template x-for="(p, index) in rankingPalpites" :key="p.id">
+                                        <tr class="hover:bg-slate-750 transition">
+                                            <td class="p-1.5 text-center font-bold text-amber-400" x-text="(index + 1) + 'º'"></td>
+                                            <td class="p-1.5 text-slate-300" x-text="'#' + p.id"></td>
+                                            <td class="p-1.5 text-slate-300 text-[11px]" x-text="p.dezenasStr"></td>
+                                            <td class="p-1.5 text-center font-bold text-emerald-400" x-text="p.premiacoes + 'x'"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                </div>
+
+                <!-- DETALHAMENTO COMPLETO -->
+                <section class="bg-slate-800 p-4 rounded-xl shadow-lg border border-slate-700">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-700 pb-2 mb-3 gap-2">
+                        <h2 class="text-sm font-bold text-emerald-400 uppercase tracking-wide">Detalhamento Completo</h2>
+
+                        <!-- FILTRO: SOMENTE PREMIADOS (ATIVO POR PADRÃO) -->
+                        <label class="inline-flex items-center cursor-pointer select-none">
+                            <input type="checkbox" x-model="apenasPremiados" class="sr-only peer">
+                            <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 relative"></div>
+                            <span class="ml-2.5 text-xs font-medium text-slate-300">Somente premiados</span>
+                        </label>
+                    </div>
+
+                    <div class="overflow-y-auto max-h-80">
+                        <table class="w-full text-left border-collapse text-xs">
+                            <thead class="sticky top-0 bg-slate-900 shadow">
+                                <tr class="text-slate-400 uppercase text-[10px]">
+                                    <th class="p-2 border-b border-slate-700">Concurso</th>
+                                    <th class="p-2 border-b border-slate-700">Data</th>
+                                    <th class="p-2 border-b border-slate-700">ID Palpite</th>
+                                    <th class="p-2 border-b border-slate-700">Dezenas Apostadas</th>
+                                    <th class="p-2 border-b border-slate-700 text-center">Acertos</th>
+                                    <th class="p-2 border-b border-slate-700 text-center">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-700 font-mono">
+                                <template x-for="item in detalhadoFiltrado" :key="item.id">
+                                    <tr class="hover:bg-slate-750 transition">
+                                        <td class="p-2 font-bold text-emerald-300" x-text="item.concurso"></td>
+                                        <td class="p-2 text-slate-400" x-text="item.data"></td>
+                                        <td class="p-2 text-slate-400" x-text="'#' + item.palpiteIndex"></td>
+                                        <td class="p-2 text-slate-300" x-text="item.palpiteStr"></td>
+                                        <td class="p-2 text-center font-bold text-slate-200" x-text="item.acertos + ' / ' + item.totalDezenas"></td>
+                                        <td class="p-2 text-center">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold"
+                                                :class="item.premiado ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'"
+                                                x-text="item.premiado ? '🏆 PREMIADO (100%)' : 'NÃO PREMIADO'">
+                                            </span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </template>
+
+    </div>
+
+    <!-- Script de Lógica -->
+    <script>
+        function apuradorGenerico() {
+            return {
+                modalidadeAtiva: 'lotofacil',
+                inputSorteios: '',
+                inputPalpites: '',
+                processado: false,
+                apenasPremiados: true, // Filtro ativo por padrão
+                erroMsg: '',
+                copiadoRanking: false,
+
+                modalidades: {
+                    lotofacil: {
+                        nome: 'Lotofácil',
+                        sorteia: 15,
+                        universo: '01..25',
+                        info: '15 dezenas (01-25)',
+                        regrasPalpite: 'Premia ao acertar 100% (15 dezenas)',
+                        eErreX: false,
+                        // REGRA: Premia apenas se acertar 100% das dezenas sorteadas (15)
+                        validarAcerto: (acertos, qtdPalpite, qtdSorteia) => acertos === qtdSorteia
+                    },
+                    erreX: {
+                        nome: 'Erre-X (Lotofácil)',
+                        sorteia: 15,
+                        universo: '01..25',
+                        info: 'Premia ao errar 100%',
+                        regrasPalpite: 'Apostas de 2 a 9 dezenas',
+                        eErreX: true,
+                        // REGRA: Premia apenas ao errar 100% (0 acertos)
+                        validarAcerto: (acertos, qtdPalpite, qtdSorteia) => acertos === 0
+                    },
+                    diaDeSorte: {
+                        nome: 'Dia de Sorte',
+                        sorteia: 7,
+                        universo: '01..31',
+                        info: '7 dezenas (01-31)',
+                        regrasPalpite: 'Premia ao acertar 100% (7 dezenas)',
+                        eErreX: false,
+                        // REGRA: Premia apenas se acertar 100% das dezenas sorteadas (7)
+                        validarAcerto: (acertos, qtdPalpite, qtdSorteia) => acertos === qtdSorteia
+                    },
+                    chispaloto: {
+                        nome: 'Chispaloto',
+                        sorteia: 6,
+                        universo: '01..28',
+                        info: '6 dezenas (01-28)',
+                        regrasPalpite: 'Premia ao acertar 100% (6 dezenas)',
+                        eErreX: false,
+                        // REGRA: Premia apenas se acertar 100% das dezenas sorteadas (6)
+                        validarAcerto: (acertos, qtdPalpite, qtdSorteia) => acertos === qtdSorteia
+                    },
+                    kino: {
+                        nome: 'Kino',
+                        sorteia: 14,
+                        universo: '01..25',
+                        info: '14 dezenas (01-25)',
+                        regrasPalpite: 'Premia ao acertar 100% (14 dezenas)',
+                        eErreX: false,
+                        // REGRA: Premia apenas se acertar 100% das dezenas sorteadas (14)
+                        validarAcerto: (acertos, qtdPalpite, qtdSorteia) => acertos === qtdSorteia
+                    }
+                },
+
+                get modalidadeAtual() {
+                    return this.modalidades[this.modalidadeAtiva];
+                },
+
+                get detalhadoFiltrado() {
+                    if (this.apenasPremiados) {
+                        return this.detalhado.filter(item => item.premiado);
+                    }
+                    return this.detalhado;
+                },
+
+                copiarRankingClipboard() {
+                    if (!this.rankingPalpites || this.rankingPalpites.length === 0) return;
+                    
+                    const texto = this.rankingPalpites.map(p => p.dezenasStr).join('\n');
+                    
+                    navigator.clipboard.writeText(texto).then(() => {
+                        this.copiadoRanking = true;
+                        setTimeout(() => {
+                            this.copiadoRanking = false;
+                        }, 2000);
+                    });
+                },
+
+                // Parser inteligente para interpretar Modelos 1, 2 e 3
+                parseLinhaSorteio(linha, qtdEsperada, index) {
+                    const partes = linha.trim().split(/\s+/);
+                    if (partes.length < qtdEsperada) return null;
+
+                    let concurso = `Nº ${index + 1}`;
+                    let data = '-';
+                    let dezenas = [];
+
+                    const regexData = /^\d{2}\/\d{2}\/\d{4}$/;
+
+                    if (regexData.test(partes[1]) && partes.length >= qtdEsperada + 2) {
+                        // Modelo 1: [Concurso] [Data] [Dezenas...]
+                        concurso = partes[0];
+                        data = partes[1];
+                        dezenas = partes.slice(2, 2 + qtdEsperada);
+                    } else if (partes.length >= qtdEsperada + 1 && !isNaN(partes[0]) && partes[0].length < 6) {
+                        // Modelo 2: [Concurso] [Dezenas...]
+                        concurso = partes[0];
+                        dezenas = partes.slice(1, 1 + qtdEsperada);
+                    } else if (partes.length >= qtdEsperada) {
+                        // Modelo 3: [Dezenas...]
+                        dezenas = partes.slice(0, qtdEsperada);
+                    }
+
+                    return { concurso, data, dezenas };
+                },
+
+                dispararFireworks() {
+                    const duration = 3 * 1000;
+                    const end = Date.now() + duration;
+
+                    (function frame() {
+                        confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 } });
+                        confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 } });
+                        if (Date.now() < end) requestAnimationFrame(frame);
+                    })();
+                },
+
+                processarApuracao() {
+                    this.erroMsg = '';
+                    const mod = this.modalidadeAtual;
+
+                    // Parse dos Sorteios
+                    const linhasSorteios = this.inputSorteios.trim().split('\n').filter(l => l.trim() !== '');
+                    const sorteiosParsed = [];
+
+                    for (let i = 0; i < linhasSorteios.length; i++) {
+                        const parsed = this.parseLinhaSorteio(linhasSorteios[i], mod.sorteia, i);
+                        if (!parsed || parsed.dezenas.length < mod.sorteia) {
+                            this.erroMsg = `A linha ${i + 1} de sorteios é inválida para ${mod.nome}. Requer exatas ${mod.sorteia} dezenas.`;
+                            return;
+                        }
+                        sorteiosParsed.push(parsed);
+                    }
+
+                    // Parse dos Palpites
+                    const linhasPalpites = this.inputPalpites.trim().split('\n').filter(l => l.trim() !== '');
+                    const palpitesParsed = linhasPalpites.map((linha, idx) => {
+                        const dezenas = linha.trim().split(/\s+/).filter(d => d !== '');
+                        return { id: idx + 1, dezenas: dezenas };
+                    });
+
+                    if (sorteiosParsed.length === 0 || palpitesParsed.length === 0) {
+                        this.erroMsg = 'Por favor, insira pelo menos um sorteio e um palpite válido.';
+                        return;
+                    }
+
+                    // Validação específica para a regra do Erre-X
+                    if (mod.eErreX) {
+                        const invalido = palpitesParsed.find(p => p.dezenas.length < 2 || p.dezenas.length > 9);
+                        if (invalido) {
+                            this.erroMsg = `No Erre-X, os palpites devem conter de 2 a 9 dezenas. O palpite #${invalido.id} possui ${invalido.dezenas.length} dezenas.`;
+                            return;
+                        }
+                    }
+
+                    let detalhesTemp = [];
+                    let totalPremiadosGeral = 0;
+                    let totalComparacoes = 0;
+                    let contagemPorConcurso = {};
+                    let contagemPorPalpite = {};
+
+                    palpitesParsed.forEach(p => {
+                        contagemPorPalpite[p.id] = {
+                            id: p.id,
+                            dezenasStr: p.dezenas.join(' '),
+                            premiacoes: 0
+                        };
+                    });
+
+                    sorteiosParsed.forEach(sorteio => {
+                        contagemPorConcurso[sorteio.concurso] = 0;
+
+                        palpitesParsed.forEach(palpite => {
+                            totalComparacoes++;
+                            let acertos = 0;
+                            palpite.dezenas.forEach(num => {
+                                // Formata dezena para comparação de 2 dígitos (ex: 2 -> 02)
+                                const numFmt = num.length === 1 ? '0' + num : num;
+                                const dezenasSorteioFmt = sorteio.dezenas.map(d => d.length === 1 ? '0' + d : d);
+                                if (dezenasSorteioFmt.includes(numFmt)) {
+                                    acertos++;
+                                }
+                            });
+
+                            // Executa a validação de 100% de precisão (100% acertos ou 100% erros para Erre-X)
+                            const ePremiado = mod.validarAcerto(acertos, palpite.dezenas.length, mod.sorteia);
+
+                            if (ePremiado) {
+                                totalPremiadosGeral++;
+                                contagemPorConcurso[sorteio.concurso]++;
+                                contagemPorPalpite[palpite.id].premiacoes++;
+                            }
+
+                            detalhesTemp.push({
+                                id: `${sorteio.concurso}-${palpite.id}`,
+                                concurso: sorteio.concurso,
+                                data: sorteio.data,
+                                palpiteIndex: palpite.id,
+                                palpiteStr: palpite.dezenas.join(' '),
+                                acertos: acertos,
+                                totalDezenas: palpite.dezenas.length,
+                                premiado: ePremiado
+                            });
+                        });
+                    });
+
+                    // Lista de Concursos e Premiações
+                    this.resumoPorConcurso = Object.keys(contagemPorConcurso).map(conc => ({
+                        concurso: conc,
+                        premiados: contagemPorConcurso[conc]
+                    }));
+
+                    // Métricas: Min, Max, Avg, Ratio
+                    const qtdsPremiados = this.resumoPorConcurso.map(c => c.premiados);
+                    const totalConcursos = sorteiosParsed.length;
+                    const concursosComPremio = qtdsPremiados.filter(q => q > 0).length;
+
+                    if (totalConcursos > 0) {
+                        const min = Math.min(...qtdsPremiados);
+                        const max = Math.max(...qtdsPremiados);
+                        const sum = qtdsPremiados.reduce((a, b) => a + b, 0);
+                        const avg = (sum / totalConcursos).toFixed(2);
+                        const ratio = ((concursosComPremio / totalConcursos) * 100).toFixed(2);
+
+                        this.metricasConcursos = { min, max, avg, ratio };
+                    }
+
+                    // Ranking dos Palpites
+                    this.rankingPalpites = Object.values(contagemPorPalpite)
+                        .sort((a, b) => b.premiacoes - a.premiacoes);
+
+                    // Resumo Geral
+                    this.resumo = {
+                        totalSorteios: totalConcursos,
+                        totalPalpites: palpitesParsed.length,
+                        totalPremiados: totalPremiadosGeral,
+                        taxaSucesso: totalComparacoes > 0 ? ((totalPremiadosGeral / totalComparacoes) * 100).toFixed(2) : 0
+                    };
+
+                    this.detalhado = detalhesTemp;
+                    this.processado = true;
+
+                    // Dispara animação se 100% dos concursos forem contemplados
+                    if (totalConcursos > 0 && concursosComPremio === totalConcursos) {
+                        this.$nextTick(() => {
+                            this.dispararFireworks();
+                        });
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

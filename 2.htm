@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apurador & Gemini Analytics</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<style>
+    body { background-color: #0b0f19; color: #e2e8f0; font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont; }
+    .gemini-glow { box-shadow: 0 0 30px -5px rgba(168, 85, 247, 0.2), 0 0 15px -5px rgba(59, 130, 246, 0.25); }
+    .gemini-border { border: 1px solid rgba(168, 85, 247, 0.3); }
+    .gemini-gradient-text { background: linear-gradient(135deg, #a855f7 0%, #3b82f6 50%, #ec4899 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .gemini-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(11, 15, 25, 0.8); }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a855f7; }
+</style>
+</head>
+<body class="p-4 md:p-6 min-h-screen">
+<div id="app" class="max-w-[1800px] mx-auto space-y-6">
+
+    <!-- INPUTS SECTION -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-gray-900/80 p-4 rounded-xl border border-gray-800 shadow-inner">
+            <label class="block text-xs font-bold text-purple-400 mb-2 uppercase tracking-wider">1. SORTEIOS</label>
+            <textarea v-model="strSorteios" class="w-full h-36 bg-slate-950 border border-gray-800/80 rounded-lg p-2.5 text-xs font-mono focus:border-purple-500 focus:outline-none transition" placeholder="3791 28/09/2026 01 02..."></textarea>
+        </div>
+        <div class="bg-gray-900/80 p-4 rounded-xl border border-gray-800 shadow-inner">
+            <label class="block text-xs font-bold text-purple-400 mb-2 uppercase tracking-wider">2. PALPITES (15 a 21 dezenas)</label>
+            <textarea v-model="strPalpites" class="w-full h-36 bg-slate-950 border border-gray-800/80 rounded-lg p-2.5 text-xs font-mono focus:border-purple-500 focus:outline-none transition" placeholder="01 02 04 06..."></textarea>
+        </div>
+        <div class="bg-gray-900/80 p-4 rounded-xl border border-gray-800 space-y-3 flex flex-col justify-between shadow-inner">
+            <div>
+                <label class="block text-xs font-bold text-purple-400 mb-2 uppercase tracking-wider">CUSTO POR JOGO</label>
+                <div class="flex flex-wrap gap-2 text-xs pt-1">
+                    <label v-for="c in [1.00, 1.50, 2.00, 5.00, 10.00]" :key="c" class="flex items-center space-x-1.5 cursor-pointer bg-slate-950 px-3 py-2 rounded-lg border border-gray-800 hover:border-purple-500/50 transition">
+                        <input type="radio" v-model.number="custoBase" :value="c" class="text-purple-600 focus:ring-purple-500 bg-gray-900 border-gray-700">
+                        <span class="font-mono">R$ {{ c.toFixed(2).replace('.', ',') }}</span>
+                    </label>
+                </div>
+            </div>
+            <div>
+                <button @click="apurar" class="w-full bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-bold py-3.5 px-4 rounded-xl shadow-lg transition-all transform active:scale-[0.99] flex items-center justify-center space-x-2">
+                    <svg class="w-5 h-5 text-purple-200" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 011.342 1.342l-.8 1.599 1.582 3.954H20a1 1 0 110 2h-1.323l-1.582 3.954.8 1.599a1 1 0 01-1.342 1.342l-1.599-.8L11 18.677V20a1 1 0 11-2 0v-1.323l-3.954-1.582-1.599.8a1 1 0 01-1.342-1.342l.8-1.599L1.323 11H0a1 1 0 110-2h1.323l1.582-3.954-.8-1.599a1 1 0 011.342-1.342l1.599.8L9 4.323V3a1 1 0 011-1z"/></svg>
+                    <span>PROCESSAR & GERAR INSIGHTS</span>
+                </button>
+                <div v-if="erro" class="text-red-400 text-xs font-bold mt-2 text-center">{{ erro }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GEMINI ANALYTICS PANEL -->
+    <div v-if="extrato.length" class="gemini-card gemini-border gemini-glow rounded-2xl p-6 space-y-6">
+        <div class="flex items-center justify-between border-b border-purple-500/20 pb-4">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-purple-500/10 rounded-lg border border-purple-500/30">
+                    <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+                <div>
+                    <h2 class="text-lg font-black tracking-wide gemini-gradient-text uppercase">Gemini Intelligence & Analytics</h2>
+                    <p class="text-xs text-gray-400">Padrões matemáticos e diagnósticos estatísticos dos sorteios e palpites</p>
+                </div>
+            </div>
+            <span class="text-[10px] bg-purple-500/20 text-purple-300 font-mono px-3 py-1 rounded-full border border-purple-500/30 uppercase tracking-widest font-bold shadow-[0_0_10px_rgba(168,85,247,0.3)]">IA Ready</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- HOT NUMBERS -->
+            <div class="bg-slate-950/60 p-4 rounded-xl border border-gray-800 space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold text-gray-400">
+                    <span>🔥 DEZENAS QUENTES</span>
+                    <span class="text-[10px] text-purple-400 font-mono">Mais sorteadas</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                    <span v-for="d in stats.dezenasQuentes" :key="d.num" class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-mono font-bold text-xs px-2 py-1 rounded-md">
+                        {{ d.num }} <span class="text-[9px] opacity-75">({{ d.qtd }}x)</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- COLD NUMBERS -->
+            <div class="bg-slate-950/60 p-4 rounded-xl border border-gray-800 space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold text-gray-400">
+                    <span>❄️ DEZENAS FRIAS</span>
+                    <span class="text-[10px] text-blue-400 font-mono">Menos sorteadas</span>
+                </div>
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                    <span v-for="d in stats.dezenasFrias" :key="d.num" class="bg-blue-500/10 border border-blue-500/30 text-blue-400 font-mono font-bold text-xs px-2 py-1 rounded-md">
+                        {{ d.num }} <span class="text-[9px] opacity-75">({{ d.qtd }}x)</span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- PARIDADE MEDIAS -->
+            <div class="bg-slate-950/60 p-4 rounded-xl border border-gray-800 space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold text-gray-400">
+                    <span>⚖️ PARIDADE NOS SORTEIOS</span>
+                    <span class="text-[10px] text-purple-400 font-mono">Média por jogo</span>
+                </div>
+                <div class="pt-1 space-y-1.5">
+                    <div class="flex justify-between text-xs font-mono">
+                        <span class="text-indigo-300">Pares: {{ stats.mediaPares.toFixed(1) }}</span>
+                        <span class="text-pink-300">Ímpares: {{ stats.mediaImpares.toFixed(1) }}</span>
+                    </div>
+                    <div class="w-full bg-gray-800 h-2 rounded-full overflow-hidden flex">
+                        <div class="bg-indigo-500 h-full" :style="{ width: (stats.mediaPares / 15 * 100) + '%' }"></div>
+                        <div class="bg-pink-500 h-full" :style="{ width: (stats.mediaImpares / 15 * 100) + '%' }"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- METRICAS DE JEJUM & COBERTURA -->
+            <div class="bg-slate-950/60 p-4 rounded-xl border border-gray-800 space-y-2">
+                <div class="flex justify-between items-center text-xs font-bold text-gray-400">
+                    <span>⚡ COBERTURA & STREAK</span>
+                    <span class="text-[10px] text-amber-400 font-mono">Resiliência</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 pt-1 font-mono text-xs">
+                    <div class="bg-gray-900/50 p-2 rounded border border-gray-800">
+                        <div class="text-[9px] text-gray-500 uppercase">Jogos c/ 15pts</div>
+                        <div class="text-purple-400 font-bold">{{ stats.taxaConvertidos.toFixed(1) }}%</div>
+                    </div>
+                    <div class="bg-gray-900/50 p-2 rounded border border-gray-800">
+                        <div class="text-[9px] text-gray-500 uppercase">Maior Jejum</div>
+                        <div class="text-amber-400 font-bold">{{ stats.maiorJejum }} conc.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EFICIENCIA POR TAMANHO DE JOGO -->
+        <div class="bg-slate-950/80 p-4 rounded-xl border border-gray-800 space-y-3">
+            <h3 class="text-xs font-bold text-gray-300 uppercase tracking-wider">🎯 Desempenho por Tamanho de Aposta (15 a 21 dezenas)</h3>
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2">
+                <div v-for="(v, sz) in stats.porTamanho" :key="sz" class="p-2.5 rounded-lg border text-center font-mono space-y-1 transition hover:border-purple-500/50"
+                     :class="v.qtd > 0 ? (v.premios > 0 ? 'bg-emerald-950/30 border-emerald-500/40' : 'bg-gray-900/60 border-gray-800') : 'bg-gray-900/20 border-gray-900 opacity-40'">
+                    <div class="text-[10px] font-bold text-purple-400">{{ sz }} Dezenas</div>
+                    <div class="text-xs font-bold text-gray-200">{{ v.qtd }} <span class="text-[9px] text-gray-500">jogos</span></div>
+                    <div class="text-xs font-bold" :class="v.premios > 0 ? 'text-emerald-400' : 'text-gray-500'">{{ v.premios }} <span class="text-[9px]">vitorias</span></div>
+                    <div class="text-[10px]" :class="v.roi >= 0 ? 'text-emerald-400' : 'text-red-400'">{{ v.roi.toFixed(0) }}% ROI</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD (FINANCEIRO + RANKING) -->
+    <div v-if="extrato.length" class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
+        <!-- 3. PAINEL FINANCEIRO -->
+        <div class="lg:col-span-2 bg-gray-900/80 p-5 rounded-2xl border border-gray-800 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-800/80 pb-3">
+                <h2 class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                    <span>3. Painel Financeiro</span>
+                </h2>
+                <span class="text-[10px] font-mono text-gray-500 uppercase">{{ extrato.length }} concursos apurados</span>
+            </div>
+
+            <!-- RESUMO KPIs -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-gray-800 text-center hover:border-red-500/30 transition">
+                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Investimento Total</div>
+                    <div class="text-base font-mono font-bold text-red-400 mt-0.5">{{ m(sumario.inv) }}</div>
+                </div>
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-gray-800 text-center hover:border-emerald-500/30 transition">
+                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Premiação Total</div>
+                    <div class="text-base font-mono font-bold text-emerald-400 mt-0.5">{{ m(sumario.pre) }}</div>
+                </div>
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-gray-800 text-center hover:border-emerald-500/30 transition">
+                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Resultado Líquido</div>
+                    <div class="text-base font-mono font-bold mt-0.5" :class="sumario.liq >= 0 ? 'text-emerald-400' : 'text-red-400'">{{ m(sumario.liq) }}</div>
+                </div>
+                <div class="bg-slate-950 p-3.5 rounded-xl border border-gray-800 text-center hover:border-purple-500/30 transition">
+                    <div class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">ROI Geral</div>
+                    <div class="text-base font-mono font-bold mt-0.5" :class="sumario.roi >= 0 ? 'text-emerald-400' : 'text-red-400'">{{ sumario.roi.toFixed(2) }}%</div>
+                </div>
+            </div>
+
+            <!-- BREAKDOWN DE PREMIAÇÕES POR TAMANHO -->
+            <div class="bg-slate-950/90 p-3.5 rounded-xl border border-purple-500/30 flex flex-wrap items-center justify-between gap-3 shadow-[0_0_15px_rgba(168,85,247,0.08)]">
+                <div class="flex items-center space-x-2 text-[11px] font-bold text-purple-300 uppercase tracking-wider">
+                    <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span>PREMIAÇÕES POR TAMANHO:</span>
+                </div>
+                <div class="flex flex-wrap gap-2 font-mono text-xs">
+                    <div v-for="(v, sz) in stats.porTamanho" :key="sz"
+                         class="px-2.5 py-1 rounded-lg border text-center flex items-center space-x-1.5 transition-all"
+                         :class="v.premios > 0 ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.2)]' : 'bg-gray-900/60 border-gray-800 text-gray-500 opacity-50'">
+                        <span class="font-bold text-[10px] text-gray-400">{{ sz }}:</span>
+                        <span class="font-extrabold text-xs" :class="v.premios > 0 ? 'text-emerald-400' : 'text-gray-500'">{{ v.premios }}x</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXTRATO TABLE -->
+            <div class="overflow-y-auto max-h-[580px] pr-1 border border-gray-800/60 rounded-xl bg-slate-950/40">
+                <table class="w-full text-xs text-left whitespace-nowrap">
+                    <thead class="text-gray-400 border-b border-gray-800 font-mono sticky top-0 bg-slate-950/95 backdrop-blur z-10">
+                        <tr>
+                            <th class="py-3 px-3">CONCURSO</th>
+                            <th class="py-3 px-3">SALDO ANTERIOR</th>
+                            <th class="py-3 px-3">INVESTIMENTO</th>
+                            <th class="py-3 px-3">PRÊMIO</th>
+                            <th class="py-3 px-3">LÍQUIDO</th>
+                            <th class="py-3 px-3">ACUMULADO</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono divide-y divide-gray-800/30">
+                        <tr v-for="l in extrato" :key="l.id" class="hover:bg-purple-900/10 transition">
+                            <td class="py-2.5 px-3 font-bold text-gray-200">{{ l.id }}</td>
+                            <td class="px-3 text-gray-400">{{ m(l.ant) }}</td>
+                            <td class="px-3 text-red-400">-{{ m(l.inv) }}</td>
+                            <td class="px-3 text-emerald-400 font-bold">{{ m(l.pre) }}</td>
+                            <td class="px-3" :class="l.liq>=0?'text-emerald-400':'text-red-400'">{{ m(l.liq) }}</td>
+                            <td class="px-3 font-bold" :class="l.acu>=0?'text-emerald-400':'text-red-400'">{{ m(l.acu) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 4. RANKING DE PALPITES -->
+        <div class="bg-gray-900/80 p-5 rounded-2xl border border-gray-800 flex flex-col h-[740px] sticky top-4 space-y-4 shadow-xl">
+            <div class="flex justify-between items-center shrink-0 border-b border-gray-800/80 pb-3">
+                <h2 class="text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center space-x-2">
+                    <span class="w-2 h-2 rounded-full bg-blue-500 animate-ping"></span>
+                    <span>4. Ranking de Palpites</span>
+                </h2>
+                <button @click="copiarTop100" class="text-xs bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border border-purple-500/30 px-3 py-1.5 rounded-lg transition font-mono flex items-center space-x-1">
+                    <span>5. Copiar Top 100</span>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto min-h-0 pr-1 rounded-xl border border-gray-800/60 bg-slate-950/40">
+                <table class="w-full text-xs text-left">
+                    <thead class="text-gray-400 border-b border-gray-800 font-mono sticky top-0 bg-slate-950/95 backdrop-blur z-10">
+                        <tr>
+                            <th class="py-3 px-2">CÓDIGO</th>
+                            <th class="py-3 px-2 text-center">PRÊMIOS</th>
+                            <th class="py-3 px-2">LÍQUIDO</th>
+                            <th class="py-3 px-2">ROI</th>
+                        </tr>
+                    </thead>
+                    <tbody class="font-mono divide-y divide-gray-800/30">
+                        <tr v-for="(r, i) in ranking.slice(0,100)" :key="i" class="hover:bg-purple-900/10 transition">
+                            <td class="py-2.5 px-2 font-bold text-indigo-400">{{ r.cod }}</td>
+                            <td class="px-2 text-center font-bold text-amber-400 bg-amber-500/5 rounded">{{ r.qtd }}</td>
+                            <td class="px-2" :class="r.liq>=0?'text-emerald-400':'text-red-400'">{{ m(r.liq) }}</td>
+                            <td class="px-2" :class="r.roi>=0?'text-emerald-400':'text-red-400'">{{ r.roi.toFixed(0) }}%</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const { createApp, ref } = Vue;
+createApp({
+    setup() {
+        const custoBase = ref(1.00);
+        const strSorteios = ref('');
+        const strPalpites = ref('');
+        const extrato = ref([]);
+        const ranking = ref([]);
+        const sumario = ref({ inv: 0, pre: 0, liq: 0, roi: 0 });
+        const erro = ref('');
+
+        const stats = ref({
+            dezenasQuentes: [],
+            dezenasFrias: [],
+            mediaPares: 0,
+            mediaImpares: 0,
+            porTamanho: {},
+            taxaConvertidos: 0,
+            maiorJejum: 0
+        });
+
+        const premissas = { 15: 120000, 16: 50000, 17: 8500, 18: 1850, 19: 555, 20: 161, 21: 51 };
+
+        // Formatação nativa no padrão pt-BR (R$ 1.000,00)
+        const m = (v) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+        const apurar = () => {
+            erro.value = '';
+            const sorteios = [], palpites = [], rankMap = new Map();
+
+            strSorteios.value.split('\n').forEach(l => {
+                const p = l.trim().split(/\s+/);
+                if(p.length >= 16) sorteios.push({ id: p[0], num: p.slice(-15).map(n=>n.padStart(2,'0')) });
+            });
+
+            sorteios.sort((a, b) => {
+                const numA = parseInt(a.id.replace(/\D/g, '')) || 0;
+                const numB = parseInt(b.id.replace(/\D/g, '')) || 0;
+                return numA - numB;
+            });
+
+            strPalpites.value.split('\n').forEach((l, idx) => {
+                const p = l.trim().split(/\s+/).map(n=>n.padStart(2,'0')).filter(n=>n!=="00");
+                if(p.length >= 15 && p.length <= 21) {
+                    const cod = `#${String(idx + 1).padStart(3, '0')}`;
+                    palpites.push({ id: idx, cod: cod, num: p, len: p.length });
+                    rankMap.set(idx, { cod: cod, str: p.join(' '), len: p.length, inv: 0, pre: 0, qtd: 0 });
+                }
+            });
+
+            if(!sorteios.length || !palpites.length) return erro.value = "Dados insuficientes ou em formato inválido.";
+
+            let saldo = 0;
+            const res = [];
+
+            const freqDezenas = {};
+            for(let i=1; i<=25; i++) freqDezenas[String(i).padStart(2,'0')] = 0;
+            let totalPares = 0, totalImpares = 0;
+
+            let jejumAtual = 0, maxJejum = 0;
+
+            sorteios.forEach(s => {
+                let pConcurso = 0;
+                let iConcurso = palpites.length * custoBase.value;
+
+                s.num.forEach(n => {
+                    freqDezenas[n] = (freqDezenas[n] || 0) + 1;
+                    if(parseInt(n) % 2 === 0) totalPares++; else totalImpares++;
+                });
+
+                palpites.forEach(p => {
+                    let acertos = 0;
+                    p.num.forEach(n => { if(s.num.includes(n)) acertos++; });
+
+                    const rData = rankMap.get(p.id);
+                    rData.inv += custoBase.value;
+
+                    if(acertos === 15) {
+                        const premio = premissas[p.len] * custoBase.value;
+                        pConcurso += premio;
+                        rData.pre += premio;
+                        rData.qtd++;
+                    }
+                });
+
+                if(pConcurso === 0) {
+                    jejumAtual++;
+                    if(jejumAtual > maxJejum) maxJejum = jejumAtual;
+                } else {
+                    jejumAtual = 0;
+                }
+
+                const liq = pConcurso - iConcurso;
+                res.push({ id: s.id, ant: saldo, inv: iConcurso, pre: pConcurso, liq: liq, acu: saldo + liq });
+                saldo += liq;
+            });
+
+            extrato.value = res;
+
+            const totInv = res.reduce((acc, r) => acc + r.inv, 0);
+            const totPre = res.reduce((acc, r) => acc + r.pre, 0);
+            const totLiq = totPre - totInv;
+            const totRoi = totInv > 0 ? (totLiq / totInv) * 100 : 0;
+            sumario.value = { inv: totInv, pre: totPre, liq: totLiq, roi: totRoi };
+
+            const fullRank = Array.from(rankMap.values()).map(r => ({
+                cod: r.cod,
+                str: r.str,
+                len: r.len,
+                qtd: r.qtd,
+                inv: r.inv,
+                pre: r.pre,
+                liq: r.pre - r.inv,
+                roi: r.inv > 0 ? ((r.pre - r.inv) / r.inv) * 100 : 0
+            })).sort((a, b) => b.liq - a.liq);
+
+            ranking.value = fullRank;
+
+            const arrDezenas = Object.keys(freqDezenas).map(k => ({ num: k, qtd: freqDezenas[k] }));
+            arrDezenas.sort((a,b) => b.qtd - a.qtd);
+
+            const porTam = {15:{qtd:0,premios:0,inv:0,pre:0,roi:0}, 16:{qtd:0,premios:0,inv:0,pre:0,roi:0}, 17:{qtd:0,premios:0,inv:0,pre:0,roi:0}, 18:{qtd:0,premios:0,inv:0,pre:0,roi:0}, 19:{qtd:0,premios:0,inv:0,pre:0,roi:0}, 20:{qtd:0,premios:0,inv:0,pre:0,roi:0}, 21:{qtd:0,premios:0,inv:0,pre:0,roi:0}};
+
+            fullRank.forEach(r => {
+                if(porTam[r.len]) {
+                    porTam[r.len].qtd++;
+                    porTam[r.len].premios += r.qtd;
+                    porTam[r.len].inv += r.inv;
+                    porTam[r.len].pre += r.pre;
+                }
+            });
+
+            Object.keys(porTam).forEach(k => {
+                const t = porTam[k];
+                t.roi = t.inv > 0 ? ((t.pre - t.inv) / t.inv) * 100 : 0;
+            });
+
+            const premiadosDistintos = fullRank.filter(r => r.qtd > 0).length;
+
+            stats.value = {
+                dezenasQuentes: arrDezenas.slice(0, 5),
+                dezenasFrias: [...arrDezenas].reverse().slice(0, 5),
+                mediaPares: totalPares / sorteios.length,
+                mediaImpares: totalImpares / sorteios.length,
+                porTamanho: porTam,
+                taxaConvertidos: palpites.length > 0 ? (premiadosDistintos / palpites.length) * 100 : 0,
+                maiorJejum: maxJejum
+            };
+        };
+
+        const copiarTop100 = () => {
+            const txt = ranking.value.slice(0, 100).map(r => r.str).join('\n');
+            navigator.clipboard.writeText(txt).then(() => alert('Top 100 copiados para a área de transferência!'));
+        };
+
+        return { custoBase, strSorteios, strPalpites, extrato, ranking, sumario, stats, erro, apurar, copiarTop100, m };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>

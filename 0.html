@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analisador Avançado da Lotofácil - Dezenas que Falham Juntas</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue.js 3 -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen p-3 md:p-6 font-sans">
+  <!-- Container ampliado para telas Full HD -->
+  <div id="app" class="max-w-[1800px] mx-auto space-y-4">
+
+    <!-- Cabeçalho Compacto -->
+    <header class="border-b border-slate-700 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div>
+        <h1 class="text-xl md:text-2xl font-bold text-emerald-400">Lotofácil - Análise Dinâmica de Falha Conjunta</h1>
+        <p class="text-slate-400 text-xs mt-0.5">
+          Identifique combinações de falha, estatísticas detalhadas (soma, par/ímpar) e o universo residual complementar.
+        </p>
+      </div>
+      <button
+        v-if="rawInput"
+        @click="clearInput"
+        class="self-start md:self-auto text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-600 px-3 py-1.5 rounded-lg transition"
+      >
+        Limpar Entrada
+      </button>
+    </header>
+
+    <!-- Layout Lado a Lado para Full HD -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+
+      <!-- Entrada de Dados (Ocupa 5 colunas no Full HD) -->
+      <section class="xl:col-span-5 bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex flex-col justify-between space-y-3">
+        <div class="flex items-center justify-between gap-2">
+          <label for="rawInput" class="font-semibold text-slate-200 text-sm flex items-center gap-2">
+            <span>Cole ou Digite os Resultados:</span>
+            <span v-if="parsedDraws.length > 0" class="text-xs bg-emerald-950 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded-full font-normal">
+              {{ parsedDraws.length }} concurso(s) total
+            </span>
+          </label>
+          <span class="text-[11px] text-slate-400">15 dezenas por linha</span>
+        </div>
+
+        <textarea
+          id="rawInput"
+          v-model="rawInput"
+          @input="processData"
+          rows="6"
+          class="w-full h-full min-h-[140px] bg-slate-950 border border-slate-700 rounded-lg p-2.5 font-mono text-xs text-emerald-300 focus:outline-none focus:border-emerald-500 transition resize-y"
+          placeholder="Cole os sorteios aqui... Exemplo:&#10;3771 25/08/2026 02 03 04 05 09 10 11 12 15 16 17 18 21 23 25&#10;3770 24/08/2026 01 02 04 07 08 12 13 15 16 17 18 19 23 24 25"
+        ></textarea>
+      </section>
+
+      <!-- Painel de Controles e Filtros (Ocupa 7 colunas no Full HD) -->
+      <section class="xl:col-span-7 bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg flex flex-col justify-between space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <!-- Controle do Tamanho da Combinação -->
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">Tamanho da falha (k dezenas):</label>
+            <div class="flex flex-wrap gap-1">
+              <button
+                v-for="k in [2, 3, 4, 5, 6, 7, 8, 9, 10]"
+                :key="k"
+                @click="groupSize = k"
+                :class="[
+                  'px-3 py-1 rounded text-xs font-bold transition',
+                  groupSize === k
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-900/50'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                ]"
+              >
+                {{ k }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtro por Tipo de Números na Falha -->
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">
+              Tipo de Número na Falha:
+            </label>
+            <div class="flex items-center gap-1">
+              <button
+                v-for="type in [
+                  { id: 'all', label: 'Todos' },
+                  { id: 'even', label: 'Apenas Pares' },
+                  { id: 'odd', label: 'Apenas Ímpares' }
+                ]"
+                :key="type.id"
+                @click="parityFilter = type.id"
+                :class="[
+                  'px-2.5 py-1 rounded text-xs font-bold transition',
+                  parityFilter === type.id
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-900/50'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                ]"
+              >
+                {{ type.label }}
+              </button>
+            </div>
+          </div>
+
+          <!-- FILTRO: Janela Móvel (Últimos Concursos - DESC) -->
+          <div class="space-y-1">
+            <label class="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">
+              Janela Móvel (Últimos Concursos):
+            </label>
+            <div class="flex flex-wrap items-center gap-1">
+              <button
+                v-for="win in [0, 5, 10, 15, 20, 30, 50, 100, 120, 150]"
+                :key="win"
+                @click="movingWindow = win"
+                :class="[
+                  'px-2.5 py-1 rounded text-xs font-bold transition',
+                  movingWindow === win
+                    ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-900/50'
+                    : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
+                ]"
+              >
+                {{ win === 0 ? 'Todos' : '#' + win }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Filtro de Ocorrências Mínimas -->
+          <div class="space-y-1">
+            <label for="minOccurrences" class="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">
+              Mínimo de Falhas Conjuntas:
+            </label>
+            <div class="flex items-center space-x-2">
+              <input
+                id="minOccurrences"
+                type="number"
+                v-model.number="minOccurrences"
+                min="1"
+                class="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1 text-xs font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
+              />
+              <span class="text-xs text-slate-400">ou mais ocorrência(s)</span>
+            </div>
+          </div>
+
+          <!-- Limite de Palpites/Resultados -->
+          <div class="space-y-1 sm:col-span-2">
+            <label class="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">
+              Limite de Palpites Exibidos:
+            </label>
+            <div class="flex items-center gap-3 pt-0.5">
+              <label
+                v-for="limit in [5, 10, 15, 25, 30, 50, 60, 75, 100, 120, 0]"
+                :key="limit"
+                class="inline-flex items-center gap-1 text-xs font-semibold cursor-pointer text-slate-200 hover:text-emerald-400 transition"
+              >
+                <input
+                  type="radio"
+                  name="resultLimit"
+                  :value="limit"
+                  v-model="resultLimit"
+                  class="accent-emerald-500 focus:ring-0 cursor-pointer"
+                />
+                <span>{{ limit === 0 ? 'Todos' : limit }}</span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Métricas Rápidas Integradas -->
+        <div v-if="parsedDraws.length > 0" class="grid grid-cols-4 gap-2 pt-2 border-t border-slate-700/60">
+          <div class="bg-slate-900/70 p-2 rounded-lg text-center border border-slate-700/50">
+            <div class="text-slate-400 text-[10px] uppercase font-semibold">Janela Ativa</div>
+            <div class="text-base font-extrabold text-slate-100">{{ activeDraws.length }} conc.</div>
+          </div>
+          <div class="bg-slate-900/70 p-2 rounded-lg text-center border border-slate-700/50">
+            <div class="text-slate-400 text-[10px] uppercase font-semibold">Falha Selecionada</div>
+            <div class="text-base font-extrabold text-emerald-400">{{ groupSize }} Dezenas</div>
+          </div>
+          <div class="bg-slate-900/70 p-2 rounded-lg text-center border border-slate-700/50">
+            <div class="text-slate-400 text-[10px] uppercase font-semibold">Univ. Residual</div>
+            <div class="text-base font-extrabold text-indigo-400">{{ 25 - groupSize }} Dezenas</div>
+          </div>
+          <div class="bg-slate-900/70 p-2 rounded-lg text-center border border-slate-700/50">
+            <div class="text-slate-400 text-[10px] uppercase font-semibold">Palpites Exibidos</div>
+            <div class="text-base font-extrabold text-emerald-300">{{ displayFailures.length }}</div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- Barra de Exportação / Cópia -->
+    <section v-if="parsedDraws.length > 0" class="bg-slate-800 rounded-xl p-3 border border-slate-700 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <h3 class="font-bold text-slate-200 text-xs uppercase tracking-wide">Exportar Dados:</h3>
+        <span class="text-xs text-slate-400">
+          Respeita a janela móvel ({{ activeDraws.length }} conc.) e limite ({{ resultLimit === 0 ? 'Sem limite' : resultLimit + ' max' }}).
+        </span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          @click="copyCurrentGroup"
+          class="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs transition shadow flex items-center gap-1"
+        >
+          <span>📋 Copiar Falhas ({{ groupSize }})</span>
+        </button>
+
+        <button
+          @click="copyResidualGroup"
+          class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow flex items-center gap-1"
+        >
+          <span>🧩 Copiar Residual ({{ 25 - groupSize }})</span>
+        </button>
+
+        <button
+          @click="copyAllGroups"
+          class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition shadow flex items-center gap-1"
+        >
+          <span>📦 Copiar Todos (2 a 8)</span>
+        </button>
+      </div>
+
+      <div v-if="copyFeedback" class="text-xs font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-3 py-1 rounded">
+        {{ copyFeedback }}
+      </div>
+    </section>
+
+    <!-- Tabela Principal Responsiva em Estilo Widescreen -->
+    <section v-if="parsedDraws.length > 0" class="bg-slate-800 rounded-xl p-4 border border-slate-700 shadow-lg space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-slate-100 flex items-center gap-2">
+          <span>Tabela de Falhas e Universo Residual</span>
+        </h2>
+        <span class="text-xs text-slate-400">Exibindo {{ displayFailures.length }} de {{ totalFilteredFailures.length }} combinações (Analisando últimos {{ activeDraws.length }} concursos)</span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-slate-700 text-slate-400 text-xs uppercase bg-slate-850">
+              <th class="py-2.5 px-3 w-12">#</th>
+              <th class="py-2.5 px-3">Dezenas Ausentes Juntas (Falha)</th>
+              <th class="py-2.5 px-3 text-center w-40">Estatísticas (Falha)</th>
+              <th class="py-2.5 px-3">Universo Residual (Sobras: {{ 25 - groupSize }} dezenas)</th>
+              <th class="py-2.5 px-3 text-center w-36">Qtd. Falhas (% Janela)</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-700/70 text-sm">
+            <tr v-for="(item, index) in displayFailures" :key="index" class="hover:bg-slate-750 transition">
+              <td class="py-2 px-3 font-bold text-slate-400 text-xs">#{{ index + 1 }}</td>
+
+              <!-- Dezenas que Falharam -->
+              <td class="py-2 px-3">
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    v-for="num in item.combination"
+                    :key="num"
+                    class="bg-rose-950 text-rose-300 border border-rose-800 font-mono text-xs px-2 py-0.5 rounded-full font-bold"
+                  >
+                    {{ String(num).padStart(2, '0') }}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Estatísticas -->
+              <td class="py-2 px-3 text-center">
+                <div class="inline-flex items-center justify-center gap-3 bg-slate-900/80 px-3 py-1 rounded-lg border border-slate-700/80 text-xs">
+                  <div class="text-slate-300"><span class="text-slate-400">Soma:</span> <strong class="text-emerald-400">{{ item.stats.sum }}</strong></div>
+                  <div class="flex items-center gap-1.5 text-[11px]">
+                    <span class="bg-emerald-950 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-800">{{ item.stats.even }}P</span>
+                    <span class="bg-amber-950 text-amber-300 px-1.5 py-0.2 rounded border border-amber-800">{{ item.stats.odd }}Í</span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Universo Residual -->
+              <td class="py-2 px-3">
+                <div class="flex flex-wrap gap-1">
+                  <span
+                    v-for="num in item.residual"
+                    :key="num"
+                    class="bg-sky-950/60 text-sky-200 border border-sky-800/60 font-mono text-[11px] px-1.5 py-0.5 rounded-md"
+                  >
+                    {{ String(num).padStart(2, '0') }}
+                  </span>
+                </div>
+              </td>
+
+              <!-- Ocorrências na Janela -->
+              <td class="py-2 px-3 text-center font-bold text-rose-400 text-xs whitespace-nowrap">
+                <span>{{ item.failCount }} falha(s)</span>
+                <span class="text-slate-400 font-normal ml-1">
+                  ({{ ((item.failCount / activeDraws.length) * 100).toFixed(1) }}%)
+                </span>
+              </td>
+            </tr>
+            <tr v-if="totalFilteredFailures.length === 0">
+              <td colspan="5" class="py-8 text-center text-slate-400">
+                Nenhuma combinação encontrada para os filtros e janela móvel aplicados.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Estado Vazio -->
+    <div v-else class="bg-slate-800/50 border border-slate-700/60 rounded-xl p-8 text-center text-slate-400 space-y-2">
+      <p class="text-base font-semibold text-slate-300">Nenhum dado informado ou formato não reconhecido.</p>
+      <p class="text-sm">Cole o histórico de sorteios na caixa acima para realizar a análise.</p>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+      setup() {
+        const rawInput = ref('');
+        const groupSize = ref(2);
+        const minOccurrences = ref(2);
+        const resultLimit = ref(10);
+        const parityFilter = ref('all'); // 'all', 'even', 'odd'
+        const movingWindow = ref(0); // 0 = Todos os concursos, ou 15, 20, 30, 50, 100
+        const parsedDraws = ref([]);
+        const copyFeedback = ref('');
+
+        const all25Numbers = Array.from({ length: 25 }, (_, i) => i + 1);
+
+        const getCombinations = (arr, k) => {
+          let results = [];
+          const helper = (start, combo) => {
+            if (combo.length === k) {
+              results.push([...combo]);
+              return;
+            }
+            for (let i = start; i < arr.length; i++) {
+              combo.push(arr[i]);
+              helper(i + 1, combo);
+              combo.pop();
+            }
+          };
+          helper(0, []);
+          return results;
+        };
+
+        const processData = () => {
+          if (!rawInput.value.trim()) {
+            parsedDraws.value = [];
+            return;
+          }
+
+          const lines = rawInput.value.trim().split('\n');
+          const draws = [];
+
+          for (const line of lines) {
+            const matches = line.match(/\b\d{1,2}\b/g);
+            if (matches) {
+              const numbers = matches
+                .map(n => parseInt(n, 10))
+                .filter(n => n >= 1 && n <= 25);
+
+              const drawnSet = new Set(numbers);
+
+              if (drawnSet.size >= 15) {
+                const drawnArray = Array.from(drawnSet).slice(0, 15);
+                const missingNumbers = all25Numbers.filter(n => !drawnSet.has(n));
+                draws.push({
+                  drawn: drawnArray,
+                  missing: missingNumbers
+                });
+              }
+            }
+          }
+          parsedDraws.value = draws;
+        };
+
+        // Computa os concursos considerados na Janela Móvel (os 'N' mais recentes / do topo)
+        const activeDraws = computed(() => {
+          if (movingWindow.value > 0) {
+            return parsedDraws.value.slice(0, movingWindow.value);
+          }
+          return parsedDraws.value;
+        });
+
+        const getFailuresForSize = (kSize) => {
+          const currentDraws = activeDraws.value;
+          if (currentDraws.length === 0) return [];
+
+          const failMap = new Map();
+
+          currentDraws.forEach(draw => {
+            if (draw.missing.length >= kSize) {
+              const combinations = getCombinations(draw.missing, kSize);
+              combinations.forEach(combo => {
+                const key = combo.join('-');
+                failMap.set(key, (failMap.get(key) || 0) + 1);
+              });
+            }
+          });
+
+          const result = [];
+          const threshold = minOccurrences.value > 0 ? minOccurrences.value : 1;
+
+          failMap.forEach((count, key) => {
+            if (count >= threshold) {
+              const combination = key.split('-').map(Number);
+
+              const even = combination.filter(n => n % 2 === 0).length;
+              const odd = combination.length - even;
+
+              if (
+                parityFilter.value === 'all' ||
+                (parityFilter.value === 'even' && even === kSize) ||
+                (parityFilter.value === 'odd' && odd === kSize)
+              ) {
+                const comboSet = new Set(combination);
+                const sum = combination.reduce((acc, curr) => acc + curr, 0);
+                const residual = all25Numbers.filter(n => !comboSet.has(n));
+
+                result.push({
+                  combination,
+                  failCount: count,
+                  stats: { sum, even, odd },
+                  residual
+                });
+              }
+            }
+          });
+
+          return result.sort((a, b) => b.failCount - a.failCount);
+        };
+
+        const totalFilteredFailures = computed(() => {
+          return getFailuresForSize(groupSize.value);
+        });
+
+        const displayFailures = computed(() => {
+          const list = totalFilteredFailures.value;
+          if (resultLimit.value > 0) {
+            return list.slice(0, resultLimit.value);
+          }
+          return list;
+        });
+
+        const copyCurrentGroup = () => {
+          const list = displayFailures.value;
+          if (list.length === 0) {
+            showFeedback('Nenhum resultado para copiar com os filtros atuais.');
+            return;
+          }
+
+          const lines = list.map(item =>
+            item.combination.map(n => String(n).padStart(2, '0')).join(' ')
+          );
+
+          navigator.clipboard.writeText(lines.join('\n')).then(() => {
+            showFeedback(`Copiado! ${lines.length} palpite(s) de falha (${groupSize.value} dezenas) copiados.`);
+          });
+        };
+
+        const copyResidualGroup = () => {
+          const list = displayFailures.value;
+          if (list.length === 0) {
+            showFeedback('Nenhum resultado para copiar com os filtros atuais.');
+            return;
+          }
+
+          const lines = list.map(item =>
+            item.residual.map(n => String(n).padStart(2, '0')).join(' ')
+          );
+
+          navigator.clipboard.writeText(lines.join('\n')).then(() => {
+            showFeedback(`Copiado! ${lines.length} universo(s) residual(is) de ${25 - groupSize.value} dezenas copiados.`);
+          });
+        };
+
+        const copyAllGroups = () => {
+          let allLines = [];
+          let totalCount = 0;
+
+          for (let k = 2; k <= 8; k++) {
+            let list = getFailuresForSize(k);
+            if (resultLimit.value > 0) {
+              list = list.slice(0, resultLimit.value);
+            }
+
+            if (list.length > 0) {
+              allLines.push(`--- GRUPOS DE FALHA (${k} DEZENAS) | RESIDUAL (${25 - k} DEZENAS) ---`);
+              list.forEach(item => {
+                const falhaStr = item.combination.map(n => String(n).padStart(2, '0')).join(' ');
+                const residualStr = item.residual.map(n => String(n).padStart(2, '0')).join(' ');
+                allLines.push(`FALHA: ${falhaStr} | RESIDUAL: ${residualStr}`);
+                totalCount++;
+              });
+              allLines.push('');
+            }
+          }
+
+          if (totalCount === 0) {
+            showFeedback('Nenhum resultado encontrado em nenhum tamanho de combinação com os filtros atuais.');
+            return;
+          }
+
+          navigator.clipboard.writeText(allLines.join('\n')).then(() => {
+            showFeedback(`Sucesso! Total de ${totalCount} combinações copiadas.`);
+          });
+        };
+
+        const showFeedback = (msg) => {
+          copyFeedback.value = msg;
+          setTimeout(() => {
+            copyFeedback.value = '';
+          }, 4000);
+        };
+
+        const clearInput = () => {
+          rawInput.value = '';
+          parsedDraws.value = [];
+        };
+
+        return {
+          rawInput,
+          groupSize,
+          minOccurrences,
+          resultLimit,
+          parityFilter,
+          movingWindow,
+          parsedDraws,
+          activeDraws,
+          totalFilteredFailures,
+          displayFailures,
+          copyFeedback,
+          processData,
+          clearInput,
+          copyCurrentGroup,
+          copyResidualGroup,
+          copyAllGroups
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
